@@ -1,6 +1,7 @@
 import sys
 import csv
 import pandas as pd
+import numpy as np
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -205,6 +206,51 @@ def scrapeNFLReceivingStats(offense=True):
     table.drop(['Rank','Receptions','Long','Fumbles','FumL'], axis=1, inplace=True)
     table.to_csv(outFileName, index_label=False)
 
+# schedule @ https://www.pro-football-reference.com/years/{YEAR}/games.htm
+def scrapeNFLSchedule(year=2018):
+
+    url = 'https://www.pro-football-reference.com/years/{}/games.htm'.format(year)
+    outFileName = 'data/nfl/nfl_games_{}.csv'.format(year)
+
+    options = webdriver.ChromeOptions()
+    options.add_argument('--ignore-certificate-errors')
+    options.add_argument('--ignore-ssl-errors')
+    driver = webdriver.Chrome(chrome_options=options)
+
+    try:
+        driver.set_page_load_timeout(60)
+        driver.get(url)
+        wait = WebDriverWait(driver, 100)
+        wait.until(EC.presence_of_element_located((By.ID, 'games')))
+        html = driver.page_source
+
+    except TimeoutException as ex:
+        isrunning = 0
+        print(str(ex))
+        driver.close()
+        sys.exit()
+
+    driver.quit()
+
+    soup = BS(html, 'html.parser')
+    teamOTable = soup.find_all('table')[0]
+    names = ['Day', 'Date', 'Time', 'Winner', '@', 'Loser', 'Box', 'PtsW', 'PtsL', 'YdsW', 'TOW', 'YdsL', 'TOL']
+    rows = teamOTable.find_all('tr')
+    table = pd.DataFrame(columns=names, index=np.arange(0,len(rows)))
+
+    rowMarker = 0
+    for i in range(0,len(rows)):
+        colMarker = 0
+        columns = rows[i].find_all('td')
+        for column in columns:
+            table.iat[rowMarker, colMarker] = column.get_text()
+            colMarker += 1
+        rowMarker += 1
+
+    table.drop(['Day','Date','Time','Box'], axis=1, inplace=True)
+    table.dropna(how='all', inplace=True)
+    table.to_csv(outFileName, index_label=False)
+
 # team offense @ http://www.espn.com/nba/statistics/team/_/stat/offense-per-game
 # team defense @ http://www.espn.com/nba/statistics/team/_/stat/defense-per-game
 def scrapeNBATeamStats(offense=True):
@@ -306,6 +352,56 @@ def scrapeNBATeamReboundStats():
     table.sort_values(by=['Tm'], inplace=True)
     table.drop(['Rank','OFF%','DEF%','REB%'], axis=1, inplace=True)
     table.to_csv(outFileName, index_label=False)
+
+# schedule @ https://www.basketball-reference.com/leagues/NBA_{YEAR}_games-{MONTH}.html
+def scrapeNBAScheduleByMonth(year=2019, month='october'):
+    url = 'https://www.basketball-reference.com/leagues/NBA_{}_games-{}.html'.format(year,month)
+    outFileName = 'data/nba/nba_games_{}_{}.csv'.format(year, month)
+
+    options = webdriver.ChromeOptions()
+    options.add_argument('--ignore-certificate-errors')
+    options.add_argument('--ignore-ssl-errors')
+    driver = webdriver.Chrome(chrome_options=options)
+
+    try:
+        driver.set_page_load_timeout(60)
+        driver.get(url)
+        wait = WebDriverWait(driver, 100)
+        wait.until(EC.presence_of_element_located((By.ID, 'schedule')))
+        html = driver.page_source
+
+    except TimeoutException as ex:
+        isrunning = 0
+        print(str(ex))
+        driver.close()
+        sys.exit()
+
+    driver.quit()
+
+    soup = BS(html, 'html.parser')
+    teamOTable = soup.find_all('table')[0]
+    names = ['Start', 'Away', 'AwayPts', 'Home', 'HomePts', 'Boxscore', 'blank', 'Attendance', 'Notes']
+    rows = teamOTable.find_all('tr')
+    table = pd.DataFrame(columns=names, index=np.arange(0,len(rows)))
+
+    rowMarker = 0
+    for i in range(0,len(rows)):
+        colMarker = 0
+        columns = rows[i].find_all('td')
+        for column in columns:
+            table.iat[rowMarker, colMarker] = column.get_text()
+            colMarker += 1
+        rowMarker += 1
+
+    table.drop(['Start','Boxscore','blank','Attendance', 'Notes'], axis=1, inplace=True)
+    table.dropna(how='all', inplace=True)
+    table.to_csv(outFileName, index_label=False)
+
+def scrapeNBASchedule(year=2019):
+    months = ['october', 'november', 'december', 'january', 'february', 'march', 'april']
+    for month in months:
+        print("Scraping {}...".format(month))
+        scrapeNBAScheduleByMonth(year, month)
 
 # scrape all NFL stats
 def scrapeAllNFL():
